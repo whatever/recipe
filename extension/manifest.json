@@ -1,0 +1,29 @@
+{
+    "manifest_version": 3,
+    "name": "Content Cleaner",
+    "version": "1.0",
+    "description": "Remove extraneous content from websites",
+    "permissions": [
+        "activeTab",
+        "tabs",
+        "scripting",
+        "storage"
+    ],
+    "action": {
+        "default_popup": "popup.html",
+        "default_icon": "icon.png"
+    },
+    "content_scripts": [
+        {
+            "matches": [
+                "<all_urls>"
+            ],
+            "js": [
+                "content.js",
+                "openai.js",
+                "popup.js"
+            ]
+        }
+    ],
+    "options_page": "options.html"
+}
