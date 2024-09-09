@@ -13,7 +13,7 @@ function removeElement(e) {
     }
 }
 
-document.addEventListener('click', removeElement, true);
+// document.addEventListener('click', removeElement, true);
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'toggleCleaner') {
@@ -21,29 +21,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 });
 
-function getApiKey() {
-    return new Promise((resolve, reject) => {
-        chrome.storage.sync.get('openaiApiKey', function(data) {
-            if (chrome.runtime.lastError) {
-                return reject(chrome.runtime.lastError);
-            }
-            resolve(data.openaiApiKey);
-        });
-    });
-}
-
-// This function will be injected into the page
-function getPageContent() {
-    return {
-        title: document.title,
-        url: window.location.href,
-        text: document.body.innerText
-    };
-}
-
 // Listen for messages from the extension
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     console.log('Message received in content script:', request);
+
     if (request.action === "getContent") {
         // Use a Promise to handle async operations
         Promise.resolve().then(() => {
@@ -58,6 +39,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             console.error('Error in content script:', error);
             sendResponse({error: error.message});
         });
+        return true; // Keep the message channel open for asynchronous response
+    } else if (request.action === "replaceText") {
+        console.log('replaceText in content script:', request);
+        // Use a Promise to handle async operations
+        try {
+            console.log('replaceText in content script:', request);
+            sendResponse({ success: true });
+            document.body.innerHTML = `<pre>${request.text}</pre>`;
+        } catch (error) {
+            console.error('Error replacing text:', error);
+            sendResponse({ success: false, error: error.message });
+        }
         return true; // Keep the message channel open for asynchronous response
     }
 });

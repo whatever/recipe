@@ -23,11 +23,13 @@ class OpenAI {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${this.apiKey}`,
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'max_tokens': '3000',
             },
             body: JSON.stringify({
                 model: 'gpt-3.5-turbo',
-                messages: messages
+                messages: messages,
+                response_format: { type: "json_object" }
             })
         });
 
@@ -65,35 +67,11 @@ document.addEventListener('DOMContentLoaded', async function () {
         console.error('Error initializing OpenAI client:', error);
     });
 
-    toggleButton.addEventListener('click', function () {
-        cleaningMode = !cleaningMode;
-        toggleButton.textContent = cleaningMode ? 'Stop Cleaning' : 'Start Cleaning';
-
-        chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-            chrome.tabs.sendMessage(tabs[0].id, { action: 'toggleCleaner', mode: cleaningMode });
-        });
-
-        // Example usage
-        getApiKey().then(apiKey => {
-            if (apiKey) {
-                console.log('API key retrieved:', apiKey);
-                // Use the API key to make requests to OpenAI
-            } else {
-                console.log('API key not set');
-                // Prompt the user to set their API key
-            }
-
-            /*
-            client.createChatCompletion([{ role: 'user', content: 'Hello, world!' }]).then(response => {
-                console.log('Chat completion response:', response);
-            }).catch(error => {
-                console.error('Error creating chat completion:', error);
-            });
-            */
-
-        }).catch(error => {
-            console.error('Error retrieving API key:', error);
-        });
+    toggleButton.addEventListener('click', async function () {
+        const content = await getCurrentTabContent();
+        const result = await callOpenAI(content);
+        document.getElementById("cleanedText").textContent = result;
+        replaceTextOnCurrentTab(result);
     });
 
     document.getElementById('options').addEventListener('click', function () {
@@ -101,7 +79,39 @@ document.addEventListener('DOMContentLoaded', async function () {
     });
 });
 
+async function callOpenAI(content) {
+    const client = new OpenAI();
+    await client.initialize();
+    const prompt = [
+        "**Instructions:**",
+        "Extract the exact Recipe Ingredients from this web page content.",
+        "",
+        "**Context:**",
+        content.text.substring(0, 3000),
+        "",
+        "**Check for Clarity:**",
+        "- Ensure that ingredients contain a quantity",
+        "",
+        "**Output:**",
+        "Return the JSON response with the following structure:",
+        `- "ingredients": A list of ingredients needed to prepare the recipe.`,
+        `- "instructions": An ordered list of instructions to prepare the recipe step by step. Each instruction should contain the following fields:`,
+        `    - "step": The step number`,
+        `    - "instruction": The instruction to prepare the recipe step by step`,
+        `    - "citation": the literal string from the web page content that contains the instruction`,
+    ].join("\n");
+    try {
+        const messages = [
+            { role: "system", content: "You are a helpful assistant that analyzes web page content and extracts the exact Recipe Ingredients from this web page content." },
+            { role: "user", content: prompt },
+        ];
+        return await client.createChatCompletion(messages);
+    } catch (error) {
+        console.error('Error calling OpenAI:', error);
+    }
+}
 
+// Get the current tab content
 function getCurrentTabContent() {
     return new Promise((resolve, reject) => {
         chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -111,6 +121,26 @@ function getCurrentTabContent() {
 
             const activeTab = tabs[0];
             chrome.tabs.sendMessage(activeTab.id, { action: "getContent" }, (response) => {
+                if (chrome.runtime.lastError) {
+                    reject(chrome.runtime.lastError);
+                } else {
+                    resolve(response);
+                }
+            });
+        });
+    });
+}
+
+// Function to replace text on the current tab
+function replaceTextOnCurrentTab(newText) {
+    return new Promise((resolve, reject) => {
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            if (chrome.runtime.lastError) {
+                return reject(chrome.runtime.lastError);
+            }
+
+            const activeTab = tabs[0];
+            chrome.tabs.sendMessage(activeTab.id, { action: "replaceText", text: newText }, (response) => {
                 if (chrome.runtime.lastError) {
                     reject(chrome.runtime.lastError);
                 } else {
